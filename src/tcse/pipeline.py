@@ -207,8 +207,8 @@ def run(cfg: dict, spec: RunSpec, force: bool = False) -> dict:
     never_failed[np.unique(sid[fail != np.iinfo(np.int32).max])] = False
 
     grids = {n: param_grid(cfg, n) for n in BASELINES}
-    if spec.svm_override:
-        grids["svm"] = [dict(g, **spec.svm_override) for g in grids["svm"]]
+    if spec.svm_override:                 # exact-SVC check: one fixed parameter set
+        grids["svm"] = [dict(spec.svm_override)]
     tune_pos = np.flatnonzero(in_tune)
     pos_index = -np.ones(len(tr), dtype=np.int64)
     pos_index[tune_pos] = np.arange(len(tune_pos))

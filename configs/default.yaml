@@ -162,3 +162,8 @@ evaluation:
 
 cross_dataset:
   horizons: [1, 7, 14, 30]
+
+svm_check:                 # exact libsvm SVC vs Nystroem approximation, one configuration
+  dataset: smartz
+  horizon: 7
+  seed: 0

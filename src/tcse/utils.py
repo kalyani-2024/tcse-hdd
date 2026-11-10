@@ -51,16 +51,17 @@ _LOGGERS: dict[str, logging.Logger] = {}
 
 
 def get_logger(name: str = "tcse", cfg: dict | None = None) -> logging.Logger:
-    if name in _LOGGERS:
-        return _LOGGERS[name]
-    log = logging.getLogger(name)
-    log.setLevel(logging.INFO)
-    log.propagate = False
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%Y-%m-%d %H:%M:%S")
-    sh = logging.StreamHandler(sys.stdout)
-    sh.setFormatter(fmt)
-    log.addHandler(sh)
-    if cfg is not None:
+    if name in _LOGGERS:
+        log = _LOGGERS[name]
+    else:
+        log = logging.getLogger(name)
+        log.setLevel(logging.INFO)
+        log.propagate = False
+        sh = logging.StreamHandler(sys.stdout)
+        sh.setFormatter(fmt)
+        log.addHandler(sh)
+    if cfg is not None and not any(isinstance(h, logging.FileHandler) for h in log.handlers):
         logdir = p(cfg, "results") / "logs"
         logdir.mkdir(parents=True, exist_ok=True)
         fh = logging.FileHandler(logdir / f"{name}_{time.strftime('%Y%m%d')}.log", encoding="utf-8")

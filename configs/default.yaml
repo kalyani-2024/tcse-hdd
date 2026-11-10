@@ -1,0 +1,164 @@
+# TCSE: Trend-aware Cost-Sensitive Stacking Ensemble -- master configuration.
+# Every tunable value used by the pipeline lives here. No magic numbers in code.
+
+project:
+  name: tcse-hdd
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  n_jobs: 4                # worker processes / threads for batch prediction
+  batch_rows: 100000       # rows per prediction / transform batch
+
+paths:
+  raw_backblaze: data/raw/backblaze
+  raw_smartz: data/raw/smartz
+  interim: data/interim
+  processed: data/processed
+  results: results
+  duckdb_temp: data/interim/duckdb_tmp
+
+duckdb:
+  memory_limit: 2GB
+  threads: 4
+
+# ---------------------------------------------------------------- datasets
+backblaze:
+  base_url: https://f001.backblazeb2.com/file/Backblaze-Hard-Drive-Data
+  quarters: [Q1_2026, Q2_2026]
+  period_start: "2026-01-01"
+  period_end: "2026-06-30"
+  models:
+    - WDC WUH722222ALE6L4
+    - TOSHIBA MG08ACA16TA
+  short_names: {"WDC WUH722222ALE6L4": wdc, "TOSHIBA MG08ACA16TA": toshiba}
+  expected:                # report Section III-A, used only to flag mismatches
+    "WDC WUH722222ALE6L4": {drives: 45700, failures: 105}
+    "TOSHIBA MG08ACA16TA": {drives: 40000, failures: 202}
+  mismatch_tolerance: 0.25 # relative deviation that triggers a warning
+
+smartz:
+  osf_node: 24y6g          # doi:10.17605/OSF.IO/24Y6G (Wei et al., Sci. Data 12, 1125, 2025)
+  files:
+    base: {name: log_hdsmart_base.csv, osf_id: us5mb, size: 1388712411}
+    param_zip: {name: log_hdsmart_param.zip, osf_id: 6w5hv, size: 1155916283}
+    offline: {name: offline_hdsmart.csv, osf_id: 6d42n, size: 75710}
+  period_start: "2017-03-08"
+  period_end: "2018-02-28"
+  # Most populous SATA HDD models (SAS drives report SCSI, not ATA, SMART IDs,
+  # so they share no attributes with Backblaze). Chosen by drive count.
+  n_models: 2
+  disk_type: SATA_HD
+  models: null             # null = pick the n_models most populous of disk_type
+
+pooling:
+  min_failed_train_drives: 100   # pool models if either has fewer failed train drives
+
+# ---------------------------------------------------------------- features
+attributes: [5, 9, 187, 188, 193, 194, 197, 198, 199]   # report Table III
+critical_attributes: [5, 187, 188, 197, 198]
+age_attribute: 9
+temperature_attribute: 194
+include_normalized: false
+horizons: [1, 7, 14, 30]
+windows: [3, 7, 14]
+default_window: 7
+window_selection:          # m chosen once per dataset on the validation set
+  horizon: 7
+  seed: 0
+  cost_ratio: 10           # validation cost of TCSE at this r decides m
+
+cleaning:
+  max_missing_frac: 0.90
+  temperature_range: [0, 80]
+  min_history: 2           # minimum records for a trend statistic
+
+missing_indicator:         # add miss_<id> if training missing fraction in [min, max]
+  min_frac: 0.001
+  max_frac: 0.90
+
+transform:
+  signed_log_for_negative: true   # ln(1+x) for x>=0 features; sign(x)ln(1+|x|) otherwise
+
+feature_selection:
+  corr_threshold: 0.95
+  mi_neighbors: 3
+  mi_negatives_per_positive: 20   # MI estimated on all positives + sampled negatives
+  mi_max_rows: 60000
+  min_mi: null             # optional MI floor; null = MI is used for ranking only
+  max_features: null
+  corr_sample_rows: 500000        # Pearson |r| estimated on a random sample of training rows
+
+# ---------------------------------------------------------------- splits
+split:
+  train: 0.70
+  val: 0.15
+  test: 0.15
+  cv_folds: 5
+temporal:
+  backblaze: {train_end: "2026-03-31", test_end: "2026-05-31", label_end: "2026-06-30"}
+  smartz: {train_months: 9}
+  val_frac: 0.15           # drive-level validation split inside the training period
+
+# ---------------------------------------------------------------- sampling
+sampling:
+  undersample_ratio: 20    # healthy : failure after random undersampling
+  smote_ratio: 0.5         # failure : healthy after SMOTE (i.e. 2:1 healthy:failure)
+  smote_k: 5
+  cap_knn_svm: 50000       # max resampled drive-days for KNN / SVM training
+
+# ---------------------------------------------------------------- models
+tuning:
+  scoring: f1
+  # Grid search is scored on held-out CV folds at the natural class distribution.
+  # Held-out folds use all failed-drive rows plus a random fraction of healthy
+  # drives; healthy rows are re-weighted by 1/fraction so the F1 estimate is
+  # unbiased for the full fold.
+  heldout_healthy_drive_frac: 0.15
+
+baselines:
+  dt:
+    params: {class_weight: balanced}
+    grid: {max_depth: [4, 6, 8, 12], min_samples_leaf: [1, 20]}
+  knn:
+    params: {weights: distance, algorithm: brute}
+    grid: {n_neighbors: [5, 15, 31]}
+  nb:
+    params: {}
+    grid: {var_smoothing: [1.0e-9]}
+  svm:
+    # mode nystroem: RBF kernel via Nystroem approximation + linear SVM + Platt scaling
+    # mode exact:    libsvm SVC(kernel=rbf) + Platt scaling (too slow for the full grid
+    #                on the target laptop; used for the approximation check)
+    params: {mode: nystroem, n_components: 500, class_weight: balanced}
+    grid: {C: [0.1, 1.0, 10.0], gamma: [scale, 0.01]}
+    exact_params: {mode: exact, kernel: rbf, class_weight: balanced, cache_size: 1000}
+
+isolation_forest:
+  n_estimators: 200
+  max_samples: 256
+  contamination: auto
+  healthy_definition: never_failed_drive   # fit only on drives that never fail
+  fit_rows: 100000         # random healthy drive-days given to the forest (each tree uses max_samples)
+
+meta:
+  C_grid: [0.001, 0.01, 0.1, 1.0, 10.0]   # C = 1/alpha
+  scoring: average_precision
+  max_iter: 2000
+  # The meta-learner is trained on the out-of-fold predictions of the same
+  # rows used to score the grid search: every row of every failed training
+  # drive plus all rows of a random tuning.heldout_healthy_drive_frac of the
+  # healthy drives, with inverse-probability weights so that the weighted
+  # class totals equal those of the full training split.
+
+threshold:
+  start: 0.01
+  stop: 0.99
+  step: 0.01
+cost_ratios: [5, 10, 50]
+c_fp: 1.0
+
+evaluation:
+  alpha: 0.05
+  roc_horizon: 7
+  primary_cost_ratio: 10
+
+cross_dataset:
+  horizons: [1, 7, 14, 30]

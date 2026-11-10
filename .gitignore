@@ -1,0 +1,11 @@
+data/
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+results/models/
+results/cache/
+*.npy
+*.joblib
+*.pkl
+.pytest_cache/

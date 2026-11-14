@@ -1,0 +1,5 @@
+H,train_rows,positives,positive_pct,healthy_per_failure,failed_drives_with_positives
+1,2480144,89,0.0036,27865.8,89
+7,2468351,490,0.0199,5036.5,105
+14,2454078,993,0.0405,2470.4,112
+30,2383154,1883,0.079,1264.6,118

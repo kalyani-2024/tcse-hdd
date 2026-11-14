@@ -26,11 +26,20 @@ MLABEL = {"precision": "Prec.", "recall": "Recall", "f1": "F1", "roc_auc": "ROC-
 DLABEL = {"backblaze": "Backblaze", "smartz": "SMART-Z"}
 
 
+def chosen_window(cfg, subset: str) -> int | None:
+    f = p(cfg, "results") / "metrics" / "window_selection" / subset / "chosen.json"
+    return json.loads(f.read_text())["window"] if f.exists() else None
+
+
 def load_family(cfg, family: str) -> list[dict]:
+    """All cached runs of a family that used the window chosen for their subset."""
     root = p(cfg, "results") / "metrics" / family
     out = []
     for f in sorted(root.glob("*/H*_m*_s*.json")):
-        out.append(json.loads(f.read_text()))
+        r = json.loads(f.read_text())
+        m = chosen_window(cfg, r["spec"]["subset"])
+        if m is None or r["spec"]["window"] == m:
+            out.append(r)
     return out
 
 
@@ -159,13 +168,14 @@ def main(argv=None):
         return 1
     L = long_rows(main_runs, ratios)
 
-    # 1. main comparison
-    t1 = summary_table(L, METHODS, prim, ratios)
-    save(t1, "table1_main_comparison",
-         f"Test-set comparison (mean $\\pm$ std over seeds). Metrics at the cost-optimal threshold for "
-         f"$C_{{FN}}{{:}}C_{{FP}}={cfg['evaluation']['primary_cost_ratio']}{{:}}1$; each cost column uses the "
-         f"threshold chosen on validation for that ratio.", cfg)
-    made.append("table1_main_comparison")
+    # 1. main comparison (primary ratio) + the same table at every other ratio
+    for r in ratios:
+        name = "table1_main_comparison" if f"r{r}" == prim else f"table1_main_comparison_r{r}"
+        t1 = summary_table(L, METHODS, f"r{r}", ratios)
+        save(t1, name,
+             f"Test-set comparison (mean $\\pm$ std over seeds). Metrics at the threshold chosen on validation "
+             f"for $C_{{FN}}{{:}}C_{{FP}}={r}{{:}}1$; each cost column uses the threshold chosen for that ratio.", cfg)
+        made.append(name)
 
     # 1b. drive-level recall (supplementary) and default-threshold baselines
     rows = []

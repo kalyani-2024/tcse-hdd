@@ -65,8 +65,9 @@ def metric_vs_horizon(cfg, L: pd.DataFrame, prim: str):
             ax.set_title(f"{DLABEL[ds]}: {lab}")
             if k.startswith("cost"):
                 ax.set_yscale("log")
-    axes[0, 0].legend(ncol=5, loc="lower left", bbox_to_anchor=(0, 1.12))
-    fig.tight_layout()
+    h, l = axes[0, 0].get_legend_handles_labels()
+    fig.legend(h, l, ncol=5, loc="upper center", bbox_to_anchor=(0.5, 1.0))
+    fig.tight_layout(rect=(0, 0, 1, 0.95 if len(datasets) > 1 else 0.9))
     _save(fig, "fig_metrics_vs_horizon", cfg)
 
 
@@ -153,8 +154,9 @@ def meta_coefficients(cfg, runs):
         ax.set_xticks(np.arange(len(feats)), [names[f] for f in feats], rotation=30, ha="right")
         ax.set_title(f"{DLABEL[ds]}: meta-learner coefficients (standardised z)")
         ax.set_ylabel("Coefficient (mean ± std over seeds)")
-    axes[0, 0].legend(ncol=4, loc="lower left", bbox_to_anchor=(0, 1.1))
-    fig.tight_layout()
+    h, l = axes[0, 0].get_legend_handles_labels()
+    fig.legend(h, l, ncol=4, loc="upper center", bbox_to_anchor=(0.5, 1.0))
+    fig.tight_layout(rect=(0, 0, 1, 0.9))
     _save(fig, "fig_meta_coefficients", cfg)
 
 
@@ -168,16 +170,18 @@ def cost_vs_threshold(cfg, runs):
     fig, axes = plt.subplots(1, len(rs), figsize=(4.6 * len(rs), 3.6), squeeze=False)
     for ax, r in zip(axes[0], rs):
         c = r["cost_curves"]["tcse"]
-        th = np.array(c["thresholds"])
+        th = -np.log10(1.0 - np.array(c["thresholds"]))      # spreads out theta near 1
         for rr in cfg["cost_ratios"]:
             v = np.array(c["val"][f"r{rr}"])
             t = np.array(c["test"][f"r{rr}"])
             ax.plot(th, t, color=rcol.get(rr, INK), linewidth=2, label=f"r = {rr} (test)")
             ax.plot(th, v, color=rcol.get(rr, INK), linewidth=1.2, linestyle="--", label=f"r = {rr} (validation)")
             star = r["results"]["tcse"][f"r{rr}"]["threshold"]
-            ax.axvline(star, color=rcol.get(rr, INK), linewidth=0.8, linestyle=":")
+            ax.axvline(-np.log10(1.0 - star), color=rcol.get(rr, INK), linewidth=0.8, linestyle=":")
         ax.set_yscale("log")
-        ax.set_xlabel("Decision threshold θ")
+        ticks = [0.5, 0.9, 0.99, 0.999, 0.9999, 0.99999, 0.999999]
+        ax.set_xticks([-np.log10(1 - v) for v in ticks], [str(v) for v in ticks], rotation=30)
+        ax.set_xlabel("Decision threshold θ (axis: −log10(1 − θ))")
         ax.set_ylabel("Total cost C(θ) = r·FN + FP")
         ax.set_title(f"{DLABEL[r['spec']['dataset']]}: TCSE, H = {H} (dotted: θ*)")
         ax.legend(fontsize=7, ncol=2)

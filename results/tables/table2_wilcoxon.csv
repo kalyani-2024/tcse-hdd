@@ -1,0 +1,25 @@
+Dataset,H,Metric,Best baseline,TCSE mean,Baseline mean,n seeds,W,p-value,Significant (5%),TCSE better
+SMART-Z,1,Prec.,KNN,0.0,0.0044,2,0.0,0.5,no,no
+SMART-Z,1,Recall,NB,0.0,0.4868,2,0.0,0.5,no,no
+SMART-Z,1,F1,KNN,0.0,0.0086,2,0.0,0.5,no,no
+SMART-Z,1,ROC-AUC,KNN,0.8229,0.829,2,1.0,1.0,no,no
+SMART-Z,1,MCC,KNN,0.0,0.0352,2,0.0,0.5,no,no
+SMART-Z,1,Cost r=5,SVM,87.5,94.5,2,0.0,1.0,no,yes
+SMART-Z,1,Cost r=10,SVM,175.0,182.0,2,0.0,1.0,no,yes
+SMART-Z,1,Cost r=50,SVM,875.0,882.0,2,0.0,1.0,no,yes
+SMART-Z,7,Prec.,NB,0.0,0.0092,2,0.0,0.5,no,no
+SMART-Z,7,Recall,NB,0.0,0.4707,2,0.0,0.5,no,no
+SMART-Z,7,F1,NB,0.0,0.018,2,0.0,0.5,no,no
+SMART-Z,7,ROC-AUC,SVM,0.8015,0.7878,2,1.0,1.0,no,yes
+SMART-Z,7,MCC,NB,0.0,0.0646,2,0.0,0.5,no,no
+SMART-Z,7,Cost r=5,SVM,490.0,494.0,2,0.0,0.5,no,yes
+SMART-Z,7,Cost r=10,SVM,980.0,984.0,2,0.0,0.5,no,yes
+SMART-Z,7,Cost r=50,SVM,4723.0,4904.0,2,0.0,0.5,no,yes
+SMART-Z,14,Prec.,NB,0.0965,0.0176,2,1.0,1.0,no,yes
+SMART-Z,14,Recall,NB,0.0281,0.4086,2,0.0,0.5,no,no
+SMART-Z,14,F1,NB,0.0435,0.0337,2,1.0,1.0,no,yes
+SMART-Z,14,ROC-AUC,SVM,0.8204,0.8071,2,0.0,0.5,no,yes
+SMART-Z,14,MCC,NB,0.0519,0.0831,2,1.0,1.0,no,no
+SMART-Z,14,Cost r=5,SVM,1055.0,1055.5,2,0.0,1.0,no,yes
+SMART-Z,14,Cost r=10,SVM,2078.0,2110.5,2,0.0,1.0,no,yes
+SMART-Z,14,Cost r=50,SVM,9974.0,10550.5,2,0.0,0.5,no,yes

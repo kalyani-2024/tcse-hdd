@@ -1,0 +1,8 @@
+attribute,name,missing_pct,mean,std,median,p99,max,nonzero_pct
+5,Reallocated sectors,0.0,1.999,75.706,0.0,5.0,11371.0,3.519
+9,Power-on hours,0.0,18083.996,8245.052,17952.0,36847.0,56187.0,99.998
+193,Load/unload cycles,0.0,415.198,416.419,362.0,1416.0,100917.0,100.0
+194,Temperature,0.0,33.949,4.958,34.0,45.0,54.0,100.0
+197,Pending sectors,0.0,0.756,43.266,0.0,1.0,26752.0,1.106
+198,Offline uncorrectable,0.0,0.397,18.138,0.0,0.0,5755.0,0.367
+199,UDMA CRC errors,0.0,3.617,113.885,0.0,0.0,10204.0,0.476

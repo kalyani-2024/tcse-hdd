@@ -1,0 +1,14 @@
+{
+  "window": 14,
+  "val_average_precision": {
+    "3": 0.02072071428077649,
+    "7": 0.03919452248540717,
+    "14": 0.053112302527886526
+  },
+  "val_cost": {
+    "3": 3010.0,
+    "7": 2919.0,
+    "14": 2844.0
+  },
+  "criterion": "max TCSE validation average precision (ties: validation cost at r=10), H=7, seed=0"
+}

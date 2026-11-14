@@ -1,0 +1,5 @@
+C 0.1 SGD 1.23s auc 0.9028
+   LinearSVC 2.53s auc 0.9110
+C 1 SGD 2.35s auc 0.9156
+   LinearSVC 6.36s auc 0.9234
+C 10 SGD 3.05s auc 0.9193

@@ -6,9 +6,17 @@ from sklearn.metrics import roc_auc_score, roc_curve
 
 
 def thresholds(cfg: dict) -> np.ndarray:
+    """Report grid 0.01..0.99 (step 0.01), plus an optional log-spaced tail
+    1 - 10^-k above 0.99 (models trained on rebalanced data give inflated
+    probabilities, so the cost optimum can lie above 0.99)."""
     t = cfg["threshold"]
     n = int(round((t["stop"] - t["start"]) / t["step"])) + 1
-    return np.round(t["start"] + t["step"] * np.arange(n), 10)
+    grid = np.round(t["start"] + t["step"] * np.arange(n), 10)
+    tail = t.get("high_tail")
+    if tail:
+        k = np.linspace(tail["from_exp"], tail["to_exp"], tail["points"])
+        grid = np.unique(np.r_[grid, 1.0 - 10.0 ** (-k)])
+    return grid
 
 
 def confusion_at(y: np.ndarray, p: np.ndarray, theta: float, w: np.ndarray | None = None) -> dict:

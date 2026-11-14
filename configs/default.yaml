@@ -128,7 +128,7 @@ baselines:
     # mode exact:    libsvm SVC(kernel=rbf) + Platt scaling (too slow for the full grid
     #                on the target laptop; used for the approximation check)
     params: {mode: nystroem, n_components: 500, class_weight: balanced}
-    grid: {C: [0.1, 1.0, 10.0], gamma: [scale, 0.01]}
+    grid: {C: [0.1, 1.0], gamma: [scale, 0.01]}   # C=10 converges too slowly in liblinear
     exact_params: {mode: exact, kernel: rbf, class_weight: balanced, cache_size: 1000}
 
 isolation_forest:
@@ -152,6 +152,9 @@ threshold:
   start: 0.01
   stop: 0.99
   step: 0.01
+  # Extension of the report grid: thresholds 1 - 10^-k for k in [2, 6] (41 points).
+  # Set high_tail: null to use the report grid only.
+  high_tail: {from_exp: 2.0, to_exp: 6.0, points: 41}
 cost_ratios: [5, 10, 50]
 c_fp: 1.0
 

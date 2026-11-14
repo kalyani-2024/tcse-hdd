@@ -22,7 +22,6 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
 from tcse.data.label import label_rows, to_days
 from tcse.evaluate import (best_threshold, confusion_curve, cost, drive_level_recall, evaluate,
@@ -116,12 +115,23 @@ def predict_level0(models: dict, iforest, gather: Gather, rows: np.ndarray, batc
                    desc: str = "") -> np.ndarray:
     """Columns: p_dt, p_knn, p_nb, p_svm, s_iforest (batched)."""
     out = np.empty((len(rows), len(BASELINES) + 1), dtype=np.float32)
-    for i in tqdm(range(0, len(rows), batch), desc=desc, leave=False, mininterval=10):
+    tt = {n: 0.0 for n in ("gather",) + tuple(BASELINES) + ("iforest",)}
+    for i in range(0, len(rows), batch):
+        t0 = time.perf_counter()
         X = gather(rows[i:i + batch])
+        tt["gather"] += time.perf_counter() - t0
         for j, name in enumerate(BASELINES):
+            t0 = time.perf_counter()
             out[i:i + len(X), j] = models[name].predict_proba(X)[:, 1]
+            tt[name] += time.perf_counter() - t0
+        t0 = time.perf_counter()
         out[i:i + len(X), -1] = anomaly_score(iforest, X)
+        tt["iforest"] += time.perf_counter() - t0
+    PREDICT_TIMES[desc] = {k: round(v, 1) for k, v in tt.items()}
     return out
+
+
+PREDICT_TIMES: dict = {}
 
 
 def _fit_iforest(cfg, gather, rows, healthy_drive_mask, sid, seed):
@@ -215,6 +225,7 @@ def run(cfg: dict, spec: RunSpec, force: bool = False) -> dict:
     oof = {n: np.full((len(grids[n]), len(tune_pos)), np.nan, np.float32) for n in BASELINES}
     oof_if = np.full(len(tune_pos), np.nan, np.float32)
     f1s = {n: np.zeros((len(grids[n]), len(folds))) for n in BASELINES}
+    model_time = {n: {"fit": 0.0, "predict": 0.0} for n in list(BASELINES) + ["iforest"]}
     fold_info = []
     for k, (fit_p, hold_p) in enumerate(folds):
         rows_fit = tr[fit_p]
@@ -225,12 +236,18 @@ def run(cfg: dict, spec: RunSpec, force: bool = False) -> dict:
         idx = pos_index[hp]
         for n in BASELINES:
             for g, params in enumerate(grids[n]):
+                t1 = time.perf_counter()
                 mdl = make_model(n, cfg, seed, params).fit(Xf, yf)
+                t2 = time.perf_counter()
                 ph = mdl.predict_proba(Xh)[:, 1]
+                model_time[n]["fit"] += t2 - t1
+                model_time[n]["predict"] += time.perf_counter() - t2
                 oof[n][g, idx] = ph
                 f1s[n][g, k] = weighted_f1(yh, ph, 0.5, wh)
+        t1 = time.perf_counter()
         iso, n_h = _fit_iforest(cfg, gather, rows_fit, never_failed, sid, seed * 100 + k)
         oof_if[idx] = anomaly_score(iso, Xh)
+        model_time["iforest"]["fit"] += time.perf_counter() - t1
         fold_info.append({"fit_rows": int(len(rows_fit)), "undersampled": int(len(u)),
                           "heldout_rows": int(len(hold_p)), "heldout_scored": int(len(hp)),
                           "heldout_pos": int(yh.sum()), "iforest_healthy_rows": n_h})
@@ -247,6 +264,8 @@ def run(cfg: dict, spec: RunSpec, force: bool = False) -> dict:
                      "best": best[n], "best_f1": float(mean[g])}
     log.info("tuned: %s", {n: (best[n], round(tuning[n]["best_f1"], 4)) for n in BASELINES})
     timings["tune_and_oof"] = round(time.perf_counter() - t0, 1)
+    timings["tune_by_model"] = {n: {k: round(v, 1) for k, v in d.items()} for n, d in model_time.items()}
+    log.info("tuning time by model: %s", timings["tune_by_model"])
 
     # ---------------------------------------------------------- meta-learner on OOF
     t0 = time.perf_counter()
@@ -287,6 +306,8 @@ def run(cfg: dict, spec: RunSpec, force: bool = False) -> dict:
     L0 = {"val": predict_level0(models, iso, gather, va, batch, "val"),
           "test": predict_level0(models, iso, gather, te, batch, "test")}
     timings["predict_val_test"] = round(time.perf_counter() - t0, 1)
+    timings["predict_by_model"] = dict(PREDICT_TIMES)
+    log.info("prediction time by model: %s", PREDICT_TIMES)
 
     def scores(split_rows, l0, nd):
         tab = {"p_dt": l0[:, 0], "p_knn": l0[:, 1], "p_nb": l0[:, 2], "p_svm": l0[:, 3],

@@ -23,20 +23,24 @@ def window_path(cfg, subset: str):
 
 
 def select_window(cfg, sub: dict) -> int:
-    """Choose m in cfg.windows on the validation set (TCSE validation cost at the
-    configured ratio, H and seed). Test data are not used."""
+    """Choose m in cfg.windows on the validation set: highest TCSE validation
+    average precision (threshold-free, so it stays informative when the
+    cost-optimal decision at some ratio is to raise no alarm); validation cost
+    at the configured ratio breaks ties. Test data are not used."""
     path = window_path(cfg, sub["name"])
     if path.exists():
         return int(load_json(path)["window"])
     ws = cfg["window_selection"]
-    costs = {}
+    costs, aps = {}, {}
     for m in cfg["windows"]:
         r = run(cfg, RunSpec("window_selection", sub["name"], sub["dataset"], ws["horizon"], ws["seed"], m))
         costs[m] = r["results"]["tcse"][f"r{ws['cost_ratio']}"]["val_cost"]
-    best = min(costs, key=lambda m: (costs[m], m != cfg["default_window"], m))
-    save_json({"window": best, "val_cost": costs, "criterion":
-               f"TCSE validation cost at r={ws['cost_ratio']}, H={ws['horizon']}, seed={ws['seed']}"}, path)
-    log.info("window for %s: m=%d (validation costs %s)", sub["name"], best, costs)
+        aps[m] = r["validation"]["tcse"]["average_precision"]
+    best = min(costs, key=lambda m: (-aps[m], costs[m], m != cfg["default_window"], m))
+    save_json({"window": best, "val_average_precision": aps, "val_cost": costs, "criterion":
+               f"max TCSE validation average precision (ties: validation cost at r={ws['cost_ratio']}), "
+               f"H={ws['horizon']}, seed={ws['seed']}"}, path)
+    log.info("window for %s: m=%d (validation AP %s, costs %s)", sub["name"], best, aps, costs)
     return best
 
 
@@ -62,13 +66,13 @@ def specs_for(cfg, family: str, sub: dict, horizons=None, seeds=None) -> list[Ru
     m = select_window(cfg, sub)
     out = []
     if family == "main":
-        out = [RunSpec("main", sub["name"], sub["dataset"], h, s, m) for h in horizons for s in seeds]
+        out = [RunSpec("main", sub["name"], sub["dataset"], h, s, m) for s in seeds for h in horizons]
     elif family == "no_trend":
         out = [RunSpec("no_trend", sub["name"], sub["dataset"], h, s, m, variant="no_trend")
-               for h in horizons for s in seeds]
+               for s in seeds for h in horizons]
     elif family == "temporal":
         out = [RunSpec("temporal", sub["name"], sub["dataset"], h, s, m, split="temporal")
-               for h in horizons for s in seeds]
+               for s in seeds for h in horizons]
     elif family == "shared":
         attrs = tuple(shared_attributes(cfg))
         others = [o for o in all_subsets(cfg) if o["dataset"] != sub["dataset"]]
@@ -76,7 +80,7 @@ def specs_for(cfg, family: str, sub: dict, horizons=None, seeds=None) -> list[Ru
         for o in others:
             out += [RunSpec("shared", sub["name"], sub["dataset"], h, s, m, attrs=attrs,
                             cross_target={"subset": o["name"], "dataset": o["dataset"]})
-                    for h in hs for s in seeds]
+                    for s in seeds for h in hs]
     elif family == "svm_exact":
         c = cfg["svm_check"]
         if sub["dataset"] != c["dataset"]:

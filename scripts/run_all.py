@@ -48,7 +48,7 @@ def main(argv=None):
     log = get_logger("tcse", cfg)
     try:
         prepare(cfg, log)
-        subs = [s for s in all_subsets(cfg) if s["dataset"] in a.datasets]
+        subs = [s for d in a.datasets for s in all_subsets(cfg) if s["dataset"] == d]
         for sub in subs:
             log.info("window for %s: m=%d", sub["name"], select_window(cfg, sub))
         for fam in a.families:

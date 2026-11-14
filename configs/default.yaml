@@ -63,7 +63,7 @@ default_window: 7
 window_selection:          # m chosen once per dataset on the validation set
   horizon: 7
   seed: 0
-  cost_ratio: 10           # validation cost of TCSE at this r decides m
+  cost_ratio: 10           # tie-breaker; m = argmax TCSE validation average precision
 
 cleaning:
   max_missing_frac: 0.90

@@ -29,6 +29,7 @@ from tcse.evaluate import (best_threshold, confusion_curve, cost, drive_level_re
 from tcse.features.transform import StoreSource, TCSEPreprocessor
 from tcse.features.trends import STATS, FeatureStore, trend_name
 from joblib import Parallel, delayed
+from sklearn.metrics import average_precision_score, roc_auc_score
 
 from tcse.models.baselines import BASELINES, knn_multi_k_proba, make_model, param_grid
 from tcse.models.tcse import (anomaly_score, fit_meta, make_isolation_forest, meta_coefficients,
@@ -365,6 +366,10 @@ def run(cfg: dict, spec: RunSpec, force: bool = False) -> dict:
             curves[mname] = {"thresholds": grid.tolist(),
                              "val": {f"r{r}": cost(cv_["fn"], cv_["fp"], r * c_fp, c_fp).tolist() for r in ratios},
                              "test": {f"r{r}": cost(ct["fn"], ct["fp"], r * c_fp, c_fp).tolist() for r in ratios}}
+    validation = {}
+    for mname, pv in S["val"].items():
+        validation[mname] = {"average_precision": float(average_precision_score(y[va], pv)),
+                             "roc_auc": float(roc_auc_score(y[va], pv))}
     roc = None
     if H == cfg["evaluation"]["roc_horizon"]:
         roc = {mname: roc_points(y[te], S["test"][mname]) for mname in S["test"]}
@@ -383,7 +388,7 @@ def run(cfg: dict, spec: RunSpec, force: bool = False) -> dict:
                      "mutual_info": pre.mutual_info_},
         "folds": fold_info, "tuning": tuning, "resampling": resample_log,
         "meta": {k: v[1] for k, v in metas.items()},
-        "results": results, "cost_curves": curves, "roc": roc, "cross": cross,
+        "results": results, "validation": validation, "cost_curves": curves, "roc": roc, "cross": cross,
         "timings": {**timings, "total": round(time.perf_counter() - t_start, 1)},
     }
     save_json(res_all, out_path)

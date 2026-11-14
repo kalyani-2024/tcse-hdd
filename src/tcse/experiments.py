@@ -57,7 +57,8 @@ def shared_attributes(cfg) -> list[int]:
 
 def specs_for(cfg, family: str, sub: dict, horizons=None, seeds=None) -> list[RunSpec]:
     horizons = horizons or cfg["horizons"]
-    seeds = cfg["project"]["seeds"] if seeds is None else seeds
+    if seeds is None:
+        seeds = (cfg.get("family_seeds") or {}).get(family) or cfg["project"]["seeds"]
     m = select_window(cfg, sub)
     out = []
     if family == "main":

@@ -170,3 +170,12 @@ svm_check:                 # exact libsvm SVC vs Nystroem approximation, one con
   dataset: smartz
   horizon: 7
   seed: 0
+
+# Seeds per experiment family (runs are cached, so a list can be extended later).
+# main / no_trend use all project seeds (needed for the Wilcoxon test).
+family_seeds:
+  main: null               # null = project.seeds
+  no_trend: null
+  temporal: [0, 1, 2]      # the split is fixed in time; seeds only change the
+                           # validation drives, resampling and model randomness
+  shared: [0, 1, 2]

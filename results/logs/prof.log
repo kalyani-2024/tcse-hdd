@@ -1,6 +1,0 @@
-(9303, 10) 443
-svm {'C': 0.1, 'gamma': 'scale'} 16.9s
-svm {'C': 0.1, 'gamma': 0.01} 18.4s
-svm {'C': 1.0, 'gamma': 'scale'} 69.0s
-svm {'C': 1.0, 'gamma': 0.01} 30.5s
-svm {'C': 10.0, 'gamma': 'scale'} 339.4s

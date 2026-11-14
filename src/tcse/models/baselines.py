@@ -33,13 +33,14 @@ class NystroemSVM(BaseEstimator, ClassifierMixin):
     Prediction costs O(n_components) per row instead of O(n_support_vectors)."""
 
     def __init__(self, C=1.0, gamma="scale", n_components=500, class_weight="balanced",
-                 platt_cv=3, max_iter=5000, random_state=None):
+                 platt_cv=3, max_iter=5000, predict_chunk=20000, random_state=None):
         self.C = C
         self.gamma = gamma
         self.n_components = n_components
         self.class_weight = class_weight
         self.platt_cv = platt_cv
         self.max_iter = max_iter
+        self.predict_chunk = predict_chunk
         self.random_state = random_state
 
     def fit(self, X, y):
@@ -60,7 +61,11 @@ class NystroemSVM(BaseEstimator, ClassifierMixin):
         return self
 
     def predict_proba(self, X):
-        return self.model_.predict_proba(np.asarray(X, dtype=np.float32))
+        """Chunked: the explicit kernel map is n_rows x n_components, so large
+        inputs are transformed piece by piece to bound memory."""
+        X = np.asarray(X, dtype=np.float32)
+        c = self.predict_chunk
+        return np.vstack([self.model_.predict_proba(X[i:i + c]) for i in range(0, max(len(X), 1), c)])
 
     def predict(self, X):
         return self.classes_[(self.predict_proba(X)[:, 1] >= 0.5).astype(int)]
@@ -82,6 +87,25 @@ def make_classifier(name: str, params: dict, seed: int):
                                           cv=3, ensemble=False)
         return NystroemSVM(random_state=seed, **params)
     raise ValueError(name)
+
+
+def knn_multi_k_proba(knn: KNeighborsClassifier, X: np.ndarray, ks: list[int]) -> dict:
+    """P(y=1) of a distance-weighted KNN for several k from ONE neighbour query
+    with max(ks). Identical to separate KNeighborsClassifier(n_neighbors=k)
+    fits on the same training data (sklearn's distance-weighting rule)."""
+    kmax = max(ks)
+    dist, ind = knn.kneighbors(X, n_neighbors=kmax)
+    lab = np.asarray(knn._y)[ind] == list(knn.classes_).index(1)
+    out = {}
+    for k in ks:
+        d = dist[:, :k]
+        with np.errstate(divide="ignore"):
+            w = 1.0 / d
+        inf = np.isinf(w)
+        rows = inf.any(axis=1)
+        w[rows] = inf[rows]                      # exact matches get all the weight
+        out[k] = (w * lab[:, :k]).sum(axis=1) / w.sum(axis=1)
+    return out
 
 
 def make_model(name: str, cfg: dict, seed: int, tuned: dict | None = None):

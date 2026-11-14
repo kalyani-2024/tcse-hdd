@@ -10,3 +10,5 @@ results/cache/
 *.pkl
 .pytest_cache/
 *.egg-info/
+results/logs/*.log
+results/metrics/dev*/

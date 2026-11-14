@@ -28,7 +28,9 @@ from tcse.evaluate import (best_threshold, confusion_curve, cost, drive_level_re
                            roc_points, thresholds, weighted_f1)
 from tcse.features.transform import StoreSource, TCSEPreprocessor
 from tcse.features.trends import STATS, FeatureStore, trend_name
-from tcse.models.baselines import BASELINES, make_model, param_grid
+from joblib import Parallel, delayed
+
+from tcse.models.baselines import BASELINES, knn_multi_k_proba, make_model, param_grid
 from tcse.models.tcse import (anomaly_score, fit_meta, make_isolation_forest, meta_coefficients,
                               meta_columns)
 from tcse.sampling import resampled_counts, undersample_rows
@@ -134,6 +136,32 @@ def predict_level0(models: dict, iforest, gather: Gather, rows: np.ndarray, batc
 PREDICT_TIMES: dict = {}
 
 
+def _grid_fit_predict(name, grid, cfg, seed, Xf, yf, Xh):
+    """Fit every grid point on the fold's training data and score the held-out rows.
+    KNN: one neighbour query serves all k. SVM / DT: grid points in parallel threads
+    (liblinear and the tree builder release the GIL)."""
+    if name == "knn" and len(grid) > 1 and all(set(g) == {"n_neighbors"} for g in grid):
+        t1 = time.perf_counter()
+        ks = [g["n_neighbors"] for g in grid]
+        mdl = make_model("knn", cfg, seed, {"n_neighbors": max(ks)}).fit(Xf, yf)
+        t2 = time.perf_counter()
+        probs = knn_multi_k_proba(mdl.steps[-1][1], Xh, ks)
+        tp = (time.perf_counter() - t2) / len(ks)
+        return [(probs[k], (t2 - t1) / len(ks), tp) for k in ks]
+
+    def one(params):
+        t1 = time.perf_counter()
+        mdl = make_model(name, cfg, seed, params).fit(Xf, yf)
+        t2 = time.perf_counter()
+        ph = mdl.predict_proba(Xh)[:, 1]
+        return ph, t2 - t1, time.perf_counter() - t2
+
+    nj = min(cfg["project"]["n_jobs"], len(grid)) if name in ("svm", "dt") else 1
+    if nj > 1:
+        return Parallel(n_jobs=nj, backend="threading")(delayed(one)(g) for g in grid)
+    return [one(g) for g in grid]
+
+
 def _fit_iforest(cfg, gather, rows, healthy_drive_mask, sid, seed):
     rng = np.random.default_rng(seed)
     h = rows[healthy_drive_mask[sid[rows]]]
@@ -235,15 +263,11 @@ def run(cfg: dict, spec: RunSpec, force: bool = False) -> dict:
         Xh, yh, wh = gather(tr[hp]), y[tr[hp]], w_tr[hp]
         idx = pos_index[hp]
         for n in BASELINES:
-            for g, params in enumerate(grids[n]):
-                t1 = time.perf_counter()
-                mdl = make_model(n, cfg, seed, params).fit(Xf, yf)
-                t2 = time.perf_counter()
-                ph = mdl.predict_proba(Xh)[:, 1]
-                model_time[n]["fit"] += t2 - t1
-                model_time[n]["predict"] += time.perf_counter() - t2
+            for g, (ph, tf, tp) in enumerate(_grid_fit_predict(n, grids[n], cfg, seed, Xf, yf, Xh)):
                 oof[n][g, idx] = ph
                 f1s[n][g, k] = weighted_f1(yh, ph, 0.5, wh)
+                model_time[n]["fit"] += tf
+                model_time[n]["predict"] += tp
         t1 = time.perf_counter()
         iso, n_h = _fit_iforest(cfg, gather, rows_fit, never_failed, sid, seed * 100 + k)
         oof_if[idx] = anomaly_score(iso, Xh)

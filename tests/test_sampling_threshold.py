@@ -97,3 +97,19 @@ def test_balanced_weights_ipw():
     w = np.r_[np.ones(10), np.full(100, 10.0)]   # healthy rows sampled at 10 %
     bw = balanced_weights(y.astype(int), w)
     assert bw[y == 1].sum() == pytest.approx(bw[y == 0].sum())
+
+
+def test_knn_multi_k_equals_separate_fits():
+    from sklearn.neighbors import KNeighborsClassifier
+    from tcse.models.baselines import knn_multi_k_proba
+    rng = np.random.default_rng(4)
+    X = rng.normal(size=(600, 4))
+    y = (X[:, 0] + rng.normal(0, 1, 600) > 1).astype(int)
+    X[5] = X[6]                                   # duplicate point -> zero distances
+    Xq = np.r_[rng.normal(size=(200, 4)), X[:3]]  # includes exact matches
+    ks = [1, 5, 15, 31]
+    big = KNeighborsClassifier(n_neighbors=31, weights="distance", algorithm="brute").fit(X, y)
+    multi = knn_multi_k_proba(big, Xq, ks)
+    for k in ks:
+        ref = KNeighborsClassifier(n_neighbors=k, weights="distance", algorithm="brute").fit(X, y)
+        np.testing.assert_allclose(multi[k], ref.predict_proba(Xq)[:, 1], atol=1e-12)

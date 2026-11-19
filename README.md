@@ -7,6 +7,31 @@ in `results/` is produced by code from those files and a fixed config + seed.
 
 <!-- RESULTS-SUMMARY -->
 
+## Status and how to continue the grid
+
+Finished and committed (`results/metrics/`): window selection for both datasets (m = 14 for
+both) and the full SMART-Z main grid (10 seeds x 4 horizons). Still to run: the Backblaze main
+grid (40 runs), the no-trend ablation, the shared-attribute / cross-dataset runs, the temporal
+hold-out and the exact-SVC check.
+
+To continue on another machine:
+
+```bash
+git clone <this repo> && cd tcse-hdd
+python -m venv .venv && .venv/Scripts/activate      # Linux/macOS: source .venv/bin/activate
+pip install -r requirements.txt && pip install -e .
+python scripts/run_pipeline.py --stage download      # ~3.5 GB Backblaze + ~2.5 GB SMART-Z, extracted
+python scripts/run_all.py --config configs/default.yaml --datasets smartz backblaze     --families main no_trend shared temporal svm_exact
+python scripts/make_tables.py --config configs/default.yaml
+```
+
+`run_all.py` rebuilds the integrated Parquet files and feature stores (~45 min), then skips every
+run that already has a JSON in `results/metrics/`, so only the missing runs are computed. Do not
+edit `configs/default.yaml` before the grid is finished, or new runs will not be comparable with
+the committed ones. Expected time on a 4-core laptop: roughly 1.5 days; keep the machine from
+sleeping. Several machines can split the work (e.g. `--families no_trend` on one,
+`--families shared temporal` on another); copy the resulting JSON files into `results/metrics/`.
+
 ## 1. Setup
 
 ```bash
